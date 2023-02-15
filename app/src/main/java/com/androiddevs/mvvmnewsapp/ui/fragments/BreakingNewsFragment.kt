@@ -7,6 +7,9 @@ import android.widget.AbsListView
 import android.widget.ProgressBar
 import android.widget.Toast
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -17,6 +20,8 @@ import com.androiddevs.mvvmnewsapp.ui.MainActivity
 import com.androiddevs.mvvmnewsapp.ui.NewsViewModel
 import com.androiddevs.mvvmnewsapp.util.Constants.Companion.QUERY_PAGE_SIZE
 import com.androiddevs.mvvmnewsapp.util.Resource
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 class BreakingNewsFragment : Fragment(R.layout.fragment_breaking_news) {
 
@@ -72,29 +77,41 @@ class BreakingNewsFragment : Fragment(R.layout.fragment_breaking_news) {
         findViews(view)
         setRecyclerView()
 
-        viewModel.breakingNews.observe(viewLifecycleOwner) { response ->
-            when (response) {
-                is Resource.Success -> {
-                    hideProgressBar()
-                    response.data?.let { newsResponse ->
-                        newsAdapter.differ.submitList(newsResponse.articles.toList())
-                        val totalPages = newsResponse.totalResults / QUERY_PAGE_SIZE + 2
-                        isLastPage = viewModel.breakingNewsPage == totalPages
-                        if (isLastPage) {
-                            recyclerView.setPadding(0, 0, 0, 0)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.breakingNewsFlow.collectLatest { response ->
+                    when (response) {
+                        is Resource.Success -> {
+                            hideProgressBar()
+                            response.data?.let { newsResponse ->
+                                newsAdapter.differ.submitList(newsResponse.articles.toList())
+                                val totalPages = newsResponse.totalResults / QUERY_PAGE_SIZE + 2
+                                isLastPage = viewModel.breakingNewsPage == totalPages
+                                if (isLastPage) {
+                                    recyclerView.setPadding(0, 0, 0, 0)
+                                }
+                            }
                         }
+                        is Resource.Error -> {
+                            hideProgressBar()
+                            response.message?.let { message ->
+                                Toast.makeText(
+                                    activity,
+                                    "An error occurred: $message",
+                                    Toast.LENGTH_LONG
+                                )
+                                    .show()
+                            }
+                        }
+                        is Resource.Loading -> showProgressBar()
+                        else -> Unit
                     }
                 }
-                is Resource.Error -> {
-                    hideProgressBar()
-                    response.message?.let { message ->
-                        Toast.makeText(activity, "An error occurred: $message", Toast.LENGTH_LONG)
-                            .show()
-                    }
-                }
-                is Resource.Loading -> showProgressBar()
             }
         }
+
+//        viewModel.breakingNews.observe(viewLifecycleOwner) {
+//        }
 
     }
 
